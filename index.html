@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark" data-page-node-id="hazJaMkRF8wSG5zm7JFfQL">
+<head data-page-node-id="DRthacOp80S0c9azS7IYwJ">
+<meta charset="utf-8" data-page-node-id="0BawCoJaNhDTYqzQzFD7ub">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" data-page-node-id="55FdCJr2WtgDkX5l9kfZCA">
+<meta name="color-scheme" content="dark light" data-page-node-id="tUxBtpcZR4cIrBEFkjI11X">
+<meta name="description" content="大事年表 —— 纯前端离线可用的高中历史时间轴工具" data-page-node-id="bJz8y9L28cCuccn8qFkivY">
+<meta name="theme-color" content="#0f1115" data-page-node-id="fgsvlVXfp0tm7o3imGdqHB">
+<title>大事年表</title>
+<!-- 站点图标：XBAOS 官网图标；若不可用（如 file:// 离线打开）由启动脚本自动回退为内联 SVG，不产生外部请求 -->
+<link rel="icon" id="site-icon" href="/bin/logo.webp" type="image/webp" data-page-node-id="vAoH4tSmAVyDqkvZPJfU3Q">
+<link rel="stylesheet" href="src/styles/theme.css" data-page-node-id="6pel6K15vCFFDPQHXOUrAI">
+<link rel="stylesheet" href="src/styles/layout.css" data-page-node-id="DLd9K9e2j54sTN4CsRSVVL">
+<link rel="stylesheet" href="src/styles/ui.css" data-page-node-id="6iJrJmY015Etr92xrtMDym">
+</head>
+<body data-page-node-id="NiwkWfihCFUJg6Gr1sgGCF">
+
+<canvas id="stage" aria-label="历史时间轴画布" data-page-node-id="pt76uSXTo4ZxC6NxLjBHgR"></canvas>
+
+<!-- 顶部悬浮按钮组 -->
+<div id="toolbar-top" class="toolbar toolbar--top" role="toolbar" aria-label="顶部工具" data-page-node-id="QN3SQpMalnVtG7Ca70PKqB"></div>
+
+<!-- 底部悬浮按钮组 -->
+<div id="toolbar-bottom" class="toolbar toolbar--bottom" role="toolbar" aria-label="底部工具" data-page-node-id="N3hWLdstU9IkBsLdVCb9vA"></div>
+
+<!-- 左下状态区：版权信息在上，状态标签在下 -->
+<div id="status-wrap" class="status-wrap" data-page-node-id="DpeAAyf8J3pp0P0fV9O7N5">
+  <div class="brand" data-page-node-id="wLk7K9gWtA8mlqQDQfVE1S">
+    <span class="brand__copy" data-page-node-id="ylQ60kr9a7yrWvsoBvmggi">© 2026 XBAOS</span>
+    <a class="brand__link" href="https://www.xbaos.com.cn/" target="_blank" rel="noopener noreferrer" data-page-node-id="mcinCFznouYeaqPPzMSXhD">访问官网</a>
+  </div>
+  <div id="status" class="status" aria-live="polite" data-page-node-id="0RWbYbpzRDQDIcLZ05RCsU"></div>
+</div>
+
+<!-- 首次提示 -->
+<div id="hint" class="hint" role="note" data-page-node-id="86GI2TF1QrAWqPT5rCEEvK"></div>
+
+<!-- 拖拽导入遮罩 -->
+<div id="dropzone" class="dropzone" hidden data-page-node-id="uCQSjFIh4yFzp9oJYGXgPX">
+  <div class="dropzone__box" data-page-node-id="jw0HFPg4aS5gDPAMZZKhy0">
+    <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="uRmj1oV2ZBVt4lpHc973Pu"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" data-page-node-id="fiumvcwIBoax94fWZxvYSc"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" data-page-node-id="howPFjBBBjGKMrEm2F1VVQ"/></svg>
+    <p data-page-node-id="73PE0jLZONd1uxibuCJZJf">松开以导入时间轴文件</p>
+    <small data-page-node-id="OeETqi2UOldWsfECw4oRm6">支持 .json，可一次拖入多个</small>
+  </div>
+</div>
+
+<!-- 弹窗容器：本身不参与绘制，仅作为挂载点，遮罩由子元素承担 -->
+<div id="modal-root" hidden data-page-node-id="2rXq8wXdEsojiyLnajcczR"></div>
+<div id="toast-root" class="toast-root" aria-live="polite" data-page-node-id="MnDvUkqufIC9lEkdm16KyI"></div>
+
+<noscript data-page-node-id="XO9J8e7muhtxKHocQm3Nj9">
+  <div class="noscript" data-page-node-id="u5P28jWaSW9EuH7OJH8RNP">「大事年表」需要启用 JavaScript 才能运行。</div>
+</noscript>
+
+<!-- ================= 内置数据（普通 script 注册，避免 file:// 下 fetch 被拦截） ================= -->
+<script src="data/timelines/index.js"></script>
+<script src="data/timelines/china-history.js"></script>
+<script src="data/timelines/world-history.js"></script>
+
+<!-- ================= 工具层 ================= -->
+<script src="src/utils/util.js"></script>
+<script src="src/utils/crc32.js"></script>
+<script src="src/utils/zip.js"></script>
+<script src="src/utils/fuzzy.js"></script>
+
+<!-- ================= 核心层 ================= -->
+<script src="src/core/time-model.js"></script>
+<script src="src/core/ticks.js"></script>
+<script src="src/core/transform.js"></script>
+
+<!-- ================= 状态与数据层 ================= -->
+<script src="src/state/state.js"></script>
+<script src="src/state/theme.js"></script>
+<script src="src/data/schema.js"></script>
+<script src="src/data/store.js"></script>
+
+<!-- ================= 渲染层 ================= -->
+<script src="src/render/events.js"></script>
+<script src="src/render/renderer.js"></script>
+
+<!-- ================= 交互层 ================= -->
+<script src="src/interaction/pointer.js"></script>
+<script src="src/interaction/keyboard.js"></script>
+
+<!-- ================= UI 层 ================= -->
+<script src="src/ui/modal.js"></script>
+<script src="src/ui/toolbar.js"></script>
+<script src="src/ui/details.js"></script>
+<script src="src/ui/search.js"></script>
+<script src="src/ui/date-jump.js"></script>
+<script src="src/ui/editor.js"></script>
+<script src="src/ui/timeline-manager.js"></script>
+<script src="src/ui/io.js"></script>
+<script src="src/ui/settings.js"></script>
+
+<!-- ================= 启动 ================= -->
+<script src="src/main.js"></script>
+</body>
+</html>
