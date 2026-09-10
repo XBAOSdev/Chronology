@@ -1,7 +1,7 @@
 /* ===================================================================
    大事年表 — 编辑表单（事件新增/修改、时间轴新建/修改）
-   · 系统内置时间轴只读：保存前会弹窗提醒，确认后复制副本再写入
-   · 描述上限 150 字
+   - 系统内置时间轴只读：保存前会弹窗提醒，确认后复制副本再写入
+   - 描述上限 150 字
    注意：保存函数必须定义在外层作用域，footer 的 onClick 才能引用到
    （早期版本把 save 定义在 onMount 内部，导致点击保存抛出
     “save is not defined”，表现为「新建时间轴没反应」）。
@@ -129,7 +129,7 @@
           '<select id="ed-timeline">' +
             S.timelines.map(function (t) {
               return '<option value="' + U.escapeHtml(t.id) + '"' + (t.id === tlId ? ' selected' : '') + '>' +
-                U.escapeHtml(t.title) + (C.store.isBuiltin(t.id) ? '（内置·需复制）' : '') + '</option>';
+                U.escapeHtml(t.title) + (C.store.isBuiltin(t.id) ? '（内置，需复制）' : '') + '</option>';
             }).join('') +
           '</select>' +
           '<div class="field__hint">选择系统内置时间轴时，会先提醒并复制出副本，事件写入副本。</div>' +

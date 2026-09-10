@@ -94,27 +94,34 @@ body {
   color: var(--text);
   font-family: inherit;
   font-size: 0.8125rem;
+  font-weight: 550;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
-              transform var(--dur-fast) var(--ease);
+              border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease-spring);
   user-select: none;
 }
-.tbtn:hover { background: var(--glass-hi); }
-.tbtn:active { transform: scale(0.96); }
+/* hover / active 显式声明文字色，杜绝「底色一变文字就隐身」 */
+.tbtn:hover { background: var(--glass-hi); color: var(--text); }
+/* 按压回弹：缩小后借 --ease-spring 轻微过冲弹回，减少动效时由 [data-motion="off"] 停用 */
+.tbtn:active { transform: scale(0.93); }
 .tbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tbtn[aria-pressed="true"],
 .tbtn.is-active {
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent);
 }
+.tbtn[aria-pressed="true"]:hover,
+.tbtn.is-active:hover { background: var(--accent-soft); color: var(--accent); }
+.tbtn--danger { color: var(--danger); }
 .tbtn--danger:hover { background: var(--danger-soft); color: var(--danger); }
 .tbtn--solid {
   background: var(--accent);
   color: var(--accent-text);
 }
-.tbtn--solid:hover { background: var(--accent); filter: brightness(1.08); }
+.tbtn--solid:hover { background: var(--accent); color: var(--accent-text); filter: brightness(1.08); }
 .tbtn[disabled] { opacity: 0.4; cursor: not-allowed; }
 .tbtn svg { width: 1.15em; height: 1.15em; flex: 0 0 auto; }
 .tbtn__label { display: inline; }
@@ -279,7 +286,8 @@ body {
   .status-wrap { left: calc(0.6rem + var(--safe-left)); bottom: calc(5rem + var(--safe-bottom)); max-width: calc(100vw - 1.2rem); }
   .brand { font-size: 0.625rem; padding: 0.14rem 0.5rem; }
   .chip { height: 26px; font-size: 0.6875rem; }
-  .hint { font-size: 0.75rem; top: calc(8.6rem + var(--safe-top)); }
+  /* 窄屏不显示操作提示：提示里的键位在触屏上基本不可用，排版也拥挤 */
+  .hint { display: none; }
 
   .fold-panel { width: min(94vw, 340px); padding: 0.7rem; }
 }

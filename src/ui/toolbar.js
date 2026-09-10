@@ -50,7 +50,7 @@
     }, { mobile: 'bar' }),
     A('fold', '折叠率', 'fold', 'bottom', function () { TB.toggleFoldPanel(); }, {
       mobile: 'bar',
-      active: function () { return !!(foldPanel && !foldPanel.hidden); }
+      active: function () { return foldOpen(); }
     }),
     A('reset', '重置视图', 'fit', 'bottom', function () { C.renderer.resetView(); }),
     A('edit', '编辑模式', 'edit', 'bottom', function () { TB.toggleEdit(); }, {
@@ -115,7 +115,7 @@
     syncState();
     updateStatus();
     updateHistoryButtons();
-    if (foldPanel && !foldPanel.hidden) { positionFoldPanel(); syncFoldPanel(); }
+    if (foldOpen()) { positionFoldPanel(); syncFoldPanel(); }
   };
 
   function openMore(kind) {
@@ -172,9 +172,12 @@
      横向折叠控制面板（浮层，不遮挡画布，便于实时观察效果）
      ================================================================== */
 
+  /** 面板是否「真正打开」（关闭动画进行中不算打开） */
+  function foldOpen() { return !!(foldPanel && !foldPanel.hidden && !U.isClosing(foldPanel)); }
+
   TB.toggleFoldPanel = function () {
     if (!foldPanel) buildFoldPanel();
-    if (foldPanel.hidden) openFoldPanel(); else closeFoldPanel();
+    if (foldOpen()) closeFoldPanel(); else openFoldPanel();
   };
 
   function buildFoldPanel() {
@@ -241,34 +244,37 @@
 
     /* 点击面板外 / 按 Esc 关闭 */
     document.addEventListener('pointerdown', function (e) {
-      if (foldPanel.hidden) return;
+      if (!foldOpen()) return;
       if (foldPanel.contains(e.target)) return;
       var btn = document.querySelector('[data-action="fold"]');
       if (btn && btn.contains(e.target)) return;
       closeFoldPanel();
     }, true);
     window.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && foldPanel && !foldPanel.hidden) closeFoldPanel();
+      if (e.key === 'Escape' && foldOpen()) closeFoldPanel();
     });
   }
 
   function openFoldPanel() {
+    if (!foldPanel) return;
     var btn = document.querySelector('[data-action="fold"]');
     foldBtn = btn;
-    foldPanel.hidden = false;
+    /* 关闭动画还没播完就又被打开：取消它，避免被旧定时器隐藏 */
+    U.animIn(foldPanel);
     positionFoldPanel();
     syncFoldPanel();
     syncState();
   }
 
   function closeFoldPanel() {
-    if (!foldPanel) return;
-    foldPanel.hidden = true;
+    if (!foldPanel || foldPanel.hidden) return;
+    U.animOut(foldPanel);
     syncState();
   }
 
   function positionFoldPanel() {
     if (!foldPanel || foldPanel.hidden || !bottomEl) return;
+    /* 定位只依赖几何，与关闭动画无关 */
     var r = bottomEl.getBoundingClientRect();
     var vh = window.innerHeight;
     var vw = window.innerWidth;
@@ -291,7 +297,7 @@
     else if (years >= 1 / 12) span = Math.max(1, Math.round(years * 12)) + ' 月/屏';
     else if (years >= 1 / 365) span = Math.max(1, Math.round(years * 365)) + ' 天/屏';
     else span = Math.max(1, Math.round(years * 525960)) + ' 分钟/屏';
-    foldNow.innerHTML = '当前折叠 ×' + formatFold(f) + '　·　' + span;
+    foldNow.innerHTML = '当前折叠 ×' + formatFold(f) + '　　' + span;
   }
 
   /* ------------------------------ 状态区 ------------------------------ */
@@ -315,17 +321,20 @@
     else if (yearsPerScreen >= 1 / 12) foldTxt = '跨度 ' + Math.max(1, Math.round(yearsPerScreen * 12)) + ' 月/屏';
     else if (yearsPerScreen >= 1 / 365) foldTxt = '跨度 ' + Math.max(1, Math.round(yearsPerScreen * 365)) + ' 天/屏';
     else foldTxt = '跨度 ' + Math.max(1, Math.round(yearsPerScreen * 525960)) + ' 分钟/屏';
-    parts.push(chip('折叠 ×' + formatFold(S.view.fold) + ' · ' + foldTxt));
+    parts.push(chip('折叠 ×' + formatFold(S.view.fold) + '　' + foldTxt));
 
     var maxLevel = S.maxLevel(ppy);
-    parts.push(chip('显示至 ' + maxLevel + ' 级' + (S.levelFilter ? '（手动）' : '（自动）')));
+    /* 自动模式下低等级标签会在「确实空旷」的地方被机会性地补显出来，
+       所以状态里要说明这一点，否则用户会以为等级筛选失效了。 */
+    parts.push(chip('显示至 ' + maxLevel + ' 级' +
+      (S.levelFilter ? '（手动）' : '（自动，空旷处补充）')));
 
     if (S.matchIds) {
       parts.push(chip('命中 ' + S.matchIds.size + ' 条', 'chip--edit'));
     }
 
     if (S.editMode) {
-      parts.push(chip('<span class="chip__dot"></span>编辑模式 · 数据仅存于当前页面', 'chip--edit'));
+      parts.push(chip('<span class="chip__dot"></span>编辑模式　数据仅存于当前页面', 'chip--edit'));
     }
     if (S.dirty) {
       parts.push(chip('<span class="chip__dot"></span>有未导出的修改', 'chip--dirty'));
@@ -365,10 +374,10 @@
         '<div class="note note--warn"><b>编辑内容只保存在当前页面内存中。</b><br>' +
         '刷新或关闭标签页后，所有新建、修改、导入的内容都会消失。请随时使用「导出」保存为文件。</div>' +
         '<div class="note" style="margin-top:.6rem">' +
-        '· 点击事件节点 → 直接在卡片里改时间、标题、层级、标签、简介<br>' +
-        '· 点击轨道空白处 → 在该时间点新增事件<br>' +
-        '· 按住事件节点左右拖动 → 调整事件时间（轻微点击不会误触发拖动）<br>' +
-        '· 系统内置时间轴为<b>只读</b>，编辑时会弹窗提醒并复制出副本</div>',
+        '　点击事件节点 → 直接在卡片里改时间、标题、层级、标签、简介<br>' +
+        '　点击轨道空白处 → 在该时间点新增事件<br>' +
+        '　按住事件节点左右拖动 → 调整事件时间（轻微点击不会误触发拖动）<br>' +
+        '　系统内置时间轴为<b>只读</b>，编辑时会弹窗提醒并复制出副本</div>',
       footer: [{ text: '知道了', primary: true }]
     });
   }
@@ -385,7 +394,7 @@
 
     S.on('view', U.throttle(function () {
       updateStatus();
-      if (foldPanel && !foldPanel.hidden) syncFoldPanel();
+      if (foldOpen()) syncFoldPanel();
     }, 90));
     S.on('data', updateStatus);
     S.on('dirty', updateStatus);

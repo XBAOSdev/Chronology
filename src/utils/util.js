@@ -100,6 +100,12 @@
     return '' + d.getFullYear() + U.pad2(d.getMonth() + 1) + U.pad2(d.getDate());
   };
 
+  /** 精确到分钟：YYYYMMDD_HHMM（截图 / 多次导出的文件不会互相覆盖） */
+  U.stampTime = function (d) {
+    d = d || new Date();
+    return U.stamp(d) + '_' + U.pad2(d.getHours()) + U.pad2(d.getMinutes());
+  };
+
   U.formatFileSize = function (bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -193,6 +199,127 @@
     fold: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M9 8.5L4.5 12 9 15.5"/><path d="M15 8.5L19.5 12 15 15.5"/></svg>'
   };
   U.icon = function (name) { return I[name] || ''; };
+
+  /* ==================================================================
+     进出场动画小工具
+     CSS 只负责「怎么动」，这里负责「什么时候真正从 DOM 移除」。
+     时序完全由 CSS 变量 --dur / --dur-slow 决定，避免两处硬编码时长。
+     ================================================================== */
+
+  /** 读取元素当前生效的入场/出场动画时长（毫秒） */
+  U.animMs = function (el) {
+    if (!el || !window.getComputedStyle) return 0;
+    var d = getComputedStyle(el).animationDuration || '0s';
+    var first = String(d).split(',')[0].trim();
+    var v = parseFloat(first);
+    if (!isFinite(v)) v = 0;
+    return /ms$/.test(first) ? v : v * 1000;
+  };
+
+  /**
+   * 播放出场动画，结束后回调（默认隐藏元素）。
+   * 同一元素重复调用会取消上一次的等待，避免「开→关→开」时被旧的定时器偷掉。
+   */
+  U.animOut = function (el, done) {
+    if (!el) return;
+    if (el.__animOut) { clearTimeout(el.__animOut.timer); el.__animOut = null; }
+    el.classList.remove('is-in');
+    el.classList.add('is-closing');
+
+    var finished = false;
+    var finish = function () {
+      if (finished) return;
+      finished = true;
+      if (el.__animOut) clearTimeout(el.__animOut.timer);
+      el.__animOut = null;
+      el.classList.remove('is-closing');
+      if (done) done();
+      else el.hidden = true;
+    };
+
+    var dur = U.animMs(el);
+    /* 减少动效时所有时长被压到 0.001ms，这里直接结束，不留 140ms 空窗 */
+    if (!(dur > 8)) { finish(); return; }
+    el.__animOut = { finish: finish, timer: setTimeout(finish, dur + 140) };
+  };
+
+  /** 取消未完成的出场动画，并把元素置为可见（用于「关闭途中又被打开」） */
+  U.animIn = function (el) {
+    if (!el) return;
+    if (el.__animOut) { clearTimeout(el.__animOut.timer); el.__animOut = null; }
+    el.classList.remove('is-closing');
+    el.hidden = false;
+  };
+
+  /** 元素是否正在播放出场动画 */
+  U.isClosing = function (el) { return !!(el && el.__animOut); };
+
+  /* ==================================================================
+     滚轮转发
+     ================================================================== */
+
+  /** 元素本身是不是一个滚动容器（与「还能不能滚」是两件事） */
+  U.isScrollBox = function (el) {
+    if (!el || el.nodeType !== 1) return false;
+    var cs = window.getComputedStyle(el);
+    return /(auto|scroll|overlay)/.test(cs.overflowY);
+  };
+
+  /** 元素在给定方向上是否「还能继续滚」 */
+  U.canScroll = function (el, dy) {
+    if (!U.isScrollBox(el)) return false;
+    var max = el.scrollHeight - el.clientHeight;
+    if (max <= 1) return false;
+    return dy < 0 ? el.scrollTop > 0 : el.scrollTop < max - 1;
+  };
+
+  /**
+   * 让浮层的「任意位置」都能滚动它的内容区。
+   *
+   * 起因（导出弹窗滚不动）：
+   *   ① .modal__head / .modal__foot / 遮罩 都不是 .modal__body 的后代，
+   *      滚轮落在它们上面时，浏览器找不到可滚动的祖先，于是什么也不发生；
+   *   ② 内容区里再嵌一层 .scroll-y 时，它的 overscroll-behavior: contain
+   *      会切断向 .modal__body 的滚动链，鼠标停在列表上同样滚不动。
+   *
+   * 规则：目标链上只要还有「确实能继续滚」的容器，就交回浏览器原生处理；
+   * 否则把这一格滚轮转给 scroller。因此内层列表该滚时照旧优先滚它，
+   * 滚到底后自动接管给外层，与常见桌面软件的观感一致。
+   *
+   * getScroller 用函数而不是元素：详情卡每次打开都重建 innerHTML，
+   * 内容区节点会被替换，必须延迟到事件发生时才取。
+   */
+  U.wheelForward = function (container, getScroller) {
+    if (!container) return;
+    container.addEventListener('wheel', function (e) {
+      var scroller = typeof getScroller === 'function' ? getScroller() : getScroller;
+      if (!scroller) return;
+      /* deltaMode: 0=像素 1=行 2=页；统一换算成像素，否则部分浏览器下步进过小 */
+      var dy = e.deltaMode === 1 ? e.deltaY * 16
+        : (e.deltaMode === 2 ? e.deltaY * (scroller.clientHeight || 400) : e.deltaY);
+      if (!dy) return;
+
+      /*
+         从事件目标往上找「第一个滚动容器」，由它决定这一格滚轮归谁：
+           · 它确实还能滚 → 交回浏览器原生处理（内层列表优先）；
+           · 它已经滚不动 / 压根没有 → 由本函数转给 scroller。
+         关键是不能只看「祖先链上有没有可滚的容器」：内层 .scroll-y 带着
+         overscroll-behavior: contain，浏览器会在这里把滚动链掐断，
+         于是哪怕外层 .modal__body 明明能滚，鼠标停在列表上也一动不动。
+         所以必须停在「第一个」滚动容器上判断并主动接管。
+       */
+      var t = e.target, holder = null;
+      while (t && t !== container && t.nodeType === 1) {
+        if (U.isScrollBox(t)) { holder = t; break; }
+        t = t.parentNode;
+      }
+      if (holder && U.canScroll(holder, dy)) return;   /* 内层还能滚 → 原生优先 */
+      if (U.canScroll(scroller, dy)) {
+        scroller.scrollTop += dy;
+        e.preventDefault();
+      }
+    }, { passive: false });
+  };
 
   C.util = U;
 })();

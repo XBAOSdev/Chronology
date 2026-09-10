@@ -59,7 +59,7 @@
     resolved = TH.resolve();
     cached = null;
     document.documentElement.setAttribute('data-theme', resolved);
-    document.documentElement.setAttribute('data-motion', S.reduceMotion ? 'off' : 'on');
+    TH.applyMotion();
 
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', resolved === 'dark' ? '#0f1115' : '#f4f6f9');
@@ -70,10 +70,74 @@
     }
   };
 
+  /**
+   * 「减少动效」的唯一落点：把 S.reduceMotion 同步到 data-motion，
+   * 并立刻结算在途的视图动画。集中在这里，避免 S.reduceMotion 与
+   * data-motion 属性各写一处、任何一处漏写就出现「开关关了但动效还在」。
+   */
+  TH.applyMotion = function () {
+    document.documentElement.setAttribute('data-motion', S.reduceMotion ? 'off' : 'on');
+    if (C.renderer && C.renderer.settle) C.renderer.settle();
+  };
+
+  /* ==================================================================
+     主题切换过场
+     ================================================================== */
+
+  var VEIL_FADE = 180;      /* 与 .theme-veil 的 transition 时长保持一致 */
+  var VEIL_HOLD = 50;       /* 全遮盖后多停一帧，避免过渡未完成就换色 */
+  var veilEl = null;
+  var veilTimers = [];
+
+  function clearVeil() {
+    for (var i = 0; i < veilTimers.length; i++) clearTimeout(veilTimers[i]);
+    veilTimers = [];
+    if (veilEl && veilEl.parentNode) veilEl.parentNode.removeChild(veilEl);
+    veilEl = null;
+  }
+
+  function currentBg() {
+    var v = (getComputedStyle(document.documentElement).getPropertyValue('--bg') || '').trim();
+    return v || '#0f1115';
+  }
+
+  /** 幕布过场：淡入 → 全遮时换主题 → 淡出。连点只会以最后一次为准。 */
+  function crossFade(apply) {
+    if (!document.body) { apply(); return; }
+    clearVeil();
+
+    var veil = document.createElement('div');
+    veil.className = 'theme-veil';
+    veil.style.background = currentBg();     /* 旧主题的背景色 */
+    document.body.appendChild(veil);
+    veilEl = veil;
+
+    void veil.offsetWidth;                   /* 强制一次样式计算，让 0→1 真的过渡 */
+    veil.style.opacity = '1';
+
+    veilTimers.push(setTimeout(function () {
+      apply();                               /* 全遮的一刻换主题，硬跳不可见 */
+      veil.style.background = currentBg();   /* 换成新主题背景色（幕布不透明，看不出） */
+      requestAnimationFrame(function () {
+        veil.style.opacity = '0';
+        veilTimers.push(setTimeout(clearVeil, VEIL_FADE + 120));
+      });
+    }, VEIL_FADE + VEIL_HOLD));
+  }
+
+  /**
+   * 应用 S.theme：颜色真的会变时走一次过场，否则直接应用。
+   * 「减少动效」开启时一步到位 —— 过场本身也是动效。
+   */
+  TH.switchTo = function () {
+    if (TH.resolve() === resolved || S.reduceMotion) { TH.apply(true); return; }
+    crossFade(function () { TH.apply(true); });
+  };
+
   TH.set = function (mode, remember) {
     S.theme = (mode === 'light' || mode === 'dark') ? mode : 'auto';
     if (remember !== false) U.storage.set(KEY, S.theme);
-    TH.apply(true);
+    TH.switchTo();
   };
 
   TH.toggle = function () {
@@ -96,7 +160,8 @@
     TH.apply(false);
 
     if (mql) {
-      var onChange = function () { if (S.theme === 'auto') TH.apply(true); };
+      /* 系统主题变化也走一次过场（S.theme === 'auto' 时才会真的变色） */
+      var onChange = function () { if (S.theme === 'auto') TH.switchTo(); };
       if (mql.addEventListener) mql.addEventListener('change', onChange);
       else if (mql.addListener) mql.addListener(onChange);
     }

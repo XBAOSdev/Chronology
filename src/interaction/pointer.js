@@ -1,11 +1,12 @@
 /* ===================================================================
    大事年表 — 指针交互
    Pointer Events 统一鼠标 / 触屏 / 触控笔
-   · 左键拖动或单指拖动 → 平移（360°）
-   · 滚轮 → 整体缩放；Ctrl/⌘ + 滚轮 → 横向折叠
-   · 双指：判断初始移动主轴，垂直捏合→整体缩放，横向捏合→横向折叠
-   · 拖动与点击用位移阈值区分
-   · 编辑模式下拖动节点可调整事件时间
+   - 左键拖动或单指拖动 → 平移（360°）
+   - 滚轮 → 整体缩放；Ctrl/⌘ + 滚轮 → 横向折叠
+   - 双指：按「绝对位移」判断主轴，垂直张合→整体缩放，横向张合→横向折叠
+        （不能用比值判轴：水平并排时竖直间距基线近 0，抖动会被放大成假信号）
+   - 拖动与点击用位移阈值区分
+   - 编辑模式下拖动节点可调整事件时间
    =================================================================== */
 (function () {
   'use strict';
@@ -22,9 +23,16 @@
   var pointerCount = 0;
 
   var CLICK_THRESHOLD = 6;      /* px */
+
+  /* 双指手势的「参考指距」：把绝对位移换算成相对张合比例。
+     用固定参考值而不是「初始指距」，是因为两指几乎水平并排时竖直间距接近 0，
+     任何除以它的比值都会被抖动放大几倍（实测 8px→26px ⇒ 3.25 倍）。 */
+  var GESTURE_REF = 260;        /* px */
+
   var gesture = null;
   var drag = null;
   var wheelAcc = 0;
+  var suppressClick = false;    /* 双指手势结束后抬手不再算作一次点击 */
 
   P.init = function (cv) {
     canvas = cv;
@@ -69,10 +77,18 @@
     pointerCount++;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
 
+    if (pointerCount === 1) suppressClick = false;
+
     if (pointerCount === 2) {
+      /* 第二指落下：取消可能已经预备好的「拖拽改时间」快照 */
+      if (drag) {
+        C.store.discardUndo();
+        drag = null;
+        canvas.classList.remove('is-move-time');
+      }
       startGesture();
-      drag = null;
-      canvas.classList.remove('is-move-time');
+      suppressClick = true;
+      canvas.classList.remove('is-panning');
       return;
     }
     if (pointerCount > 2) return;
@@ -166,6 +182,12 @@
     if (pointerCount === 0) {
       canvas.classList.remove('is-panning');
 
+      /* 本次交互只要经历过双指手势，抬手就不再当作点击，
+         否则捏合结束会被误判成「点了某个事件 / 在空白处新建事件」。 */
+      var wasGesture = suppressClick;
+      suppressClick = false;
+      gesture = null;
+
       if (drag) {
         var started = drag.started;
         canvas.classList.remove('is-move-time');
@@ -174,16 +196,16 @@
           S.emit('toast', { type: 'ok', text: '已调整事件时间（记得导出）' });
           C.store.refreshBounds();
         } else {
-          /* 按下但未发生位移 → 视为一次点击 */
           C.store.discardUndo();   /* 丢弃预留的快照 */
-          handleClick(p.x, p.y);
+          /* 按下但未发生位移 → 视为一次点击 */
+          if (!wasGesture) handleClick(p.x, p.y);
         }
         drag = null;
         R.markDirty();
         return;
       }
 
-      gesture = null;
+      if (wasGesture) { R.markDirty(); return; }
 
       /* 点击（未超过阈值） */
       if (!p.panning && Math.abs(p.x - p.sx) < CLICK_THRESHOLD && Math.abs(p.y - p.sy) < CLICK_THRESHOLD) {
@@ -193,11 +215,12 @@
     }
 
     if (pointerCount === 1) {
-      /* 从双指回到单指：重置手势基准 */
+      /* 从双指回到单指：重置手势基准与平移阈值，避免单指乱飘 */
       var keys = ownKeys(pointers);
       var rest = keys.length ? pointers[keys[0]] : null;
-      if (rest) { rest.sx = rest.x; rest.sy = rest.y; }
+      if (rest) { rest.sx = rest.x; rest.sy = rest.y; rest.panning = false; }
       gesture = null;
+      /* 注意：这里不清 suppressClick —— 要一直抑制到最后一根手指抬起 */
     }
   }
 
@@ -301,49 +324,69 @@
   function startGesture() {
     var pts = twoPointers();
     if (pts.length < 2) return;
+    var dx = Math.abs(pts[0].x - pts[1].x);
+    var dy = Math.abs(pts[0].y - pts[1].y);
     gesture = {
-      dx: Math.abs(pts[0].x - pts[1].x) || 1,
-      dy: Math.abs(pts[0].y - pts[1].y) || 1,
-      zoom: S.view.zoom,
-      fold: S.view.fold,
-      axis: null,
-      cx: (pts[0].x + pts[1].x) / 2,
-      cy: (pts[0].y + pts[1].y) / 2,
-      x: S.view.x,
-      y: S.view.y
+      /* 起始指距：只用于「累计变化量」的归零基准，不参与比值运算 */
+      dx0: dx,
+      dy0: dy,
+      /* 上一帧指距：用于算这一帧的增量 */
+      lastDx: dx,
+      lastDy: dy,
+      axis: null
+      /* 双指重心固定在起始位置：这样两指整体平移 = 平移画布，
+         而围绕重心张合 = 缩放 / 折叠，互不干扰 */
     };
+    gesture.cx = (pts[0].x + pts[1].x) / 2;
+    gesture.cy = (pts[0].y + pts[1].y) / 2;
   }
 
+  /**
+   * 主轴判定：比较两轴的「绝对变化量」，绝不比较比值。
+   * 两指几乎水平并排时竖直间距基线极小（个位数 px），比值会被抖动放大数倍，
+   * 于是「水平捏合」被误判成「垂直捏合」——这是本次要修的核心 bug。
+   * 另外要求主轴变化量明显大于次轴（1.6 倍），否则继续等，不急着锁轴。
+   */
   function moveGesture() {
     if (!gesture) { startGesture(); return; }
     var pts = twoPointers();
     if (pts.length < 2) return;
 
-    var dx = Math.abs(pts[0].x - pts[1].x) || 1;
-    var dy = Math.abs(pts[0].y - pts[1].y) || 1;
-    var rx = dx / gesture.dx;
-    var ry = dy / gesture.dy;
+    var dx = Math.abs(pts[0].x - pts[1].x);
+    var dy = Math.abs(pts[0].y - pts[1].y);
 
-    /* 判断主轴：首次明显变化时锁定，避免抖动 */
+    var ddx = dx - gesture.lastDx;      /* 这一帧的增量，用来推进缩放 */
+    var ddy = dy - gesture.lastDy;
+
     if (!gesture.axis) {
-      var ex = Math.abs(rx - 1), ey = Math.abs(ry - 1);
-      if (ex < 0.06 && ey < 0.06) return;
-      gesture.axis = ex > ey ? 'fold' : 'zoom';
+      /* 锁轴用「自起始以来的累计变化量」，抖动会互相抵消 */
+      var ax = Math.abs(dx - gesture.dx0) / GESTURE_REF;
+      var ay = Math.abs(dy - gesture.dy0) / GESTURE_REF;
+      var hi = Math.max(ax, ay), lo = Math.min(ax, ay);
+      if (hi < 0.10) return;            /* ≈26px：还没真正张开，先不定轴 */
+      if (hi < lo * 1.6) return;        /* 两轴一起动，方向不明，再等等 */
+      gesture.axis = ax > ay ? 'fold' : 'zoom';
     }
+
+    /* 步进比例同样用「绝对位移 / 参考指距」，小基数除法不会爆炸 */
+    var step = 1 + (gesture.axis === 'zoom' ? ddy : ddx) / GESTURE_REF;
+    step = U.clamp(step, 0.6, 1.68);    /* 单帧限幅：防止一帧跳变、也防误触 */
+
+    gesture.lastDx = dx;
+    gesture.lastDy = dy;
 
     var tf = C.transform.make(S.view, R.size);
     var wx = tf.s2x(gesture.cx);
     var wy = tf.s2y(gesture.cy);
 
-    if (gesture.axis === 'zoom') {
-      S.view.zoom = C.transform.clampZoom(gesture.zoom * ry);
-    } else {
-      S.view.fold = C.transform.clampFold(gesture.fold * rx);
-    }
+    if (gesture.axis === 'zoom') S.view.zoom = C.transform.clampZoom(S.view.zoom * step);
+    else S.view.fold = C.transform.clampFold(S.view.fold * step);
+
     var tf2 = C.transform.make(S.view, R.size);
     S.view.x += wx - tf2.s2x(gesture.cx);
     S.view.y += wy - tf2.s2y(gesture.cy);
 
+    R.syncViewTarget();     /* 手势直接写 S.view，必须丢弃平滑目标，否则会被拉回 */
     S.emit('view');
     R.markDirty();
   }

@@ -35,9 +35,9 @@
       '</div>' +
       '<div class="sec-title">说明</div>' +
       '<div class="note">' +
-        '· 导入内容只存在于当前页面内存中，刷新即消失，请及时导出<br>' +
-        '· 事件描述超过 150 字会自动截断<br>' +
-        '· 单个文件上限 ' + U.formatFileSize(MAX_SIZE) + '，一次最多 ' + MAX_FILES + ' 个文件' +
+        '　导入内容只存在于当前页面内存中，刷新即消失，请及时导出<br>' +
+        '　事件描述超过 150 字会自动截断<br>' +
+        '　单个文件上限 ' + U.formatFileSize(MAX_SIZE) + '，一次最多 ' + MAX_FILES + ' 个文件' +
       '</div>';
 
     var api = UI.modal.open({
@@ -52,7 +52,7 @@
           var files = Array.prototype.slice.call(input.files || []);
           if (files.length) {
             api.close();
-            readFiles(files);
+            IO.readFiles(files);
           }
         });
       }
@@ -143,15 +143,15 @@
     var html = '';
 
     html += '<div class="note" style="margin-bottom:.7rem">' +
-      '成功导入 <b>' + r.added.length + '</b> 条　·　' +
-      '跳过 <b>' + r.skipped.length + '</b> 条　·　' +
+      '成功导入 <b>' + r.added.length + '</b> 条　　' +
+      '跳过 <b>' + r.skipped.length + '</b> 条　　' +
       '无效 <b>' + r.invalid.length + '</b> 条</div>';
 
     if (r.added.length) {
       html += '<div class="sec-title">已导入</div><div class="list">' + r.added.map(function (tl) {
         return '<div class="item"><span class="item__bar" style="background:' + U.escapeHtml(tl.color) + '"></span>' +
           '<span class="item__main"><span class="item__title">' + U.escapeHtml(tl.title) + '</span>' +
-          '<span class="item__meta">' + U.escapeHtml(tl.id) + '　·　' + tl.events.length + ' 个事件</span></span></div>';
+          '<span class="item__meta">' + U.escapeHtml(tl.id) + '　　' + tl.events.length + ' 个事件</span></span></div>';
       }).join('') + '</div>';
     }
 
@@ -161,7 +161,7 @@
         '<div class="list" style="margin-top:.5rem">' + r.skipped.map(function (s) {
           return '<div class="item"><span class="item__main">' +
             '<span class="item__title">' + U.escapeHtml(s.name) + '</span>' +
-            '<span class="item__meta">冲突 ID：' + U.escapeHtml(s.id) + '　·　' + U.escapeHtml(s.reason) + '</span>' +
+            '<span class="item__meta">冲突 ID：' + U.escapeHtml(s.id) + '　　' + U.escapeHtml(s.reason) + '</span>' +
             '</span></div>';
         }).join('') + '</div>';
     }
@@ -210,11 +210,19 @@
           ? '当前有 <b>' + C.store.dirtyCount() + '</b> 处尚未导出的修改。关闭页面后这些内容不会保留。'
           : '当前没有未导出的修改。') +
       '</div>' +
+      '<div class="sec-title">当前视图</div>' +
+      '<div class="list">' +
+        '<div class="item"><span class="item__main">' +
+          '<span class="item__title">导出当前视图（PNG）</span>' +
+          '<span class="item__meta">画布此刻的完整画面，保留当前缩放与横向折叠　　' +
+            '<span id="io-png-size">按设备像素导出</span></span>' +
+          '</span><button class="btn btn--sm btn--primary" id="io-png">导出 PNG</button></div>' +
+      '</div>' +
       '<div class="sec-title">导出用户数据</div>' +
       '<div class="list">' +
         '<div class="item"><span class="item__main">' +
           '<span class="item__title">全部用户时间轴（ZIP）</span>' +
-          '<span class="item__meta">共 ' + counts.user + ' 条　·　零依赖 store 模式打包，可用常见解压软件打开</span>' +
+          '<span class="item__meta">共 ' + counts.user + ' 条　　零依赖 store 模式打包，可用常见解压软件打开</span>' +
           '</span><button class="btn btn--sm btn--primary" id="io-zip">导出 ZIP</button></div>' +
       '</div>' +
       '<div class="sec-title">单条导出（JSON）</div>' +
@@ -225,7 +233,7 @@
             '<span class="item__main">' +
               '<span class="item__title">' + U.escapeHtml(tl.title) +
                 (C.store.isBuiltin(tl.id) ? '<span class="pill">内置</span>' : '') + '</span>' +
-              '<span class="item__meta">' + U.escapeHtml(tl.id) + '　·　' + tl.events.length + ' 个事件</span>' +
+              '<span class="item__meta">' + U.escapeHtml(tl.id) + '　　' + tl.events.length + ' 个事件</span>' +
             '</span>' +
             '<button class="btn btn--sm" data-exp="' + U.escapeHtml(tl.id) + '">导出</button>' +
           '</div>';
@@ -233,10 +241,11 @@
       '</div>' +
       '<div class="sec-title">说明</div>' +
       '<div class="note">' +
-        '· 单条文件名：<code>时间轴ID.json</code><br>' +
-        '· 多条文件名：<code>大事年表_用户时间轴_YYYYMMDD.zip</code><br>' +
-        '· 导出文件可直接再次导入（往返不丢字段）<br>' +
-        '· 不引入 JSZip 等第三方库，ZIP 结构（本地头 + 中央目录 + CRC32）由本程序自实现' +
+        '　单条文件名：<code>时间轴ID.json</code><br>' +
+        '　多条文件名：<code>大事年表_用户时间轴_YYYYMMDD.zip</code><br>' +
+        '　视图文件名：<code>大事年表_视图_YYYYMMDD_HHMM.png</code>（仅画布内容，不含浮层按钮）<br>' +
+        '　导出文件可直接再次导入（往返不丢字段）<br>' +
+        '　不引入 JSZip 等第三方库，ZIP 结构（本地头 + 中央目录 + CRC32）由本程序自实现' +
       '</div>';
 
     var api = UI.modal.open({
@@ -251,6 +260,12 @@
             IO.exportOne(btn.getAttribute('data-exp'));
           });
         });
+        b.querySelector('#io-png').addEventListener('click', function () { IO.exportViewPNG(); });
+        var sizeEl = b.querySelector('#io-png-size');
+        if (sizeEl) {
+          var cv = document.getElementById('stage');
+          if (cv) sizeEl.textContent = cv.width + ' × ' + cv.height + ' px';
+        }
         refreshZipButton(b.querySelector('#io-zip'));
       }
     });
@@ -281,6 +296,51 @@
     U.downloadBlob(out.blob, out.filename);
     C.store.clearDirtyIds(null);
     UI.toast('已导出 ' + out.count + ' 条时间轴（' + out.filename + '）', 'ok', 3200);
+  };
+
+  /* ------------------------------------------------------------------
+     导出当前视图为 PNG
+     纯前端零依赖：直接取主画布的 backing store（已按 DPR 放大），
+     toBlob 得到 PNG。导出的是「画布内容」——不含 DOM 浮层按钮、弹窗，
+     这类按钮本身就是工具，落在图片里反而是干扰。
+     ------------------------------------------------------------------ */
+
+  IO.exportViewPNG = function () {
+    var R = C.renderer;
+    var cv = document.getElementById('stage');
+    if (!cv || !R) { UI.toast('画布尚未就绪', 'err'); return; }
+
+    /* 先标脏、再等两帧：确保拿到的是「按当前视图完整画完」的那一帧，
+       否则可能在补间/平滑进行到一半时截到过渡态。 */
+    R.markDirty();
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        var w = cv.width, h = cv.height;
+        var name = '大事年表_视图_' + U.stampTime() + '.png';
+
+        function done(blob) {
+          if (!blob || !blob.size) { UI.toast('导出失败：无法生成图片', 'err'); return; }
+          U.downloadBlob(blob, name);
+          UI.toast('已导出当前视图（' + w + ' × ' + h + '）', 'ok', 3200);
+        }
+
+        if (typeof cv.toBlob === 'function') {
+          cv.toBlob(done, 'image/png');
+          return;
+        }
+        /* 兜底：极老浏览器没有 toBlob，退化成 dataURL 再转 Blob */
+        try {
+          var url = cv.toDataURL('image/png');
+          var b64 = url.split(',')[1] || '';
+          var bin = atob(b64);
+          var buf = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+          done(new Blob([buf], { type: 'image/png' }));
+        } catch (e) {
+          UI.toast('导出失败：' + (e && e.message ? e.message : e), 'err');
+        }
+      });
+    });
   };
 
   /* ==================================================================

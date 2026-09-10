@@ -1,8 +1,8 @@
 /* ===================================================================
    大事年表 — 时间轴管理
    定位 / 折叠 / 显示隐藏 / 上移下移排序 / 改名（内置除外）/ 复制 / 导出 / 删除
-   · 面板打开期间监听数据变化，任何外部改动都会即时反映到列表
-   · 系统内置时间轴只读：改名等写操作会先提示「需复制副本」
+   - 面板打开期间监听数据变化，任何外部改动都会即时反映到列表
+   - 系统内置时间轴只读：改名等写操作会先提示「需复制副本」
    =================================================================== */
 (function () {
   'use strict';
@@ -101,7 +101,7 @@
           '<span class="item__main">' +
             '<span class="item__title"><span class="item__name">' + U.escapeHtml(tl.title) + '</span>' +
               (builtin
-                ? '<span class="pill">内置 · 只读</span>'
+                ? '<span class="pill">内置 只读</span>'
                 : '<span class="pill pill--accent">用户</span>') +
               (tl.copyOf ? '<span class="pill">副本</span>' : '') +
               (hidden ? '<span class="pill">已隐藏</span>' : '') +

@@ -26,6 +26,75 @@
   var rafId = 0;
   var tween = null;
 
+  /* ------------------------------------------------------------------
+     视图平滑
+     S.view 永远是「当前实际显示」的视图；滚轮 / 按钮改的是 viewTarget，
+     渲染循环按 dt 做指数逼近 —— 于是滚轮一格不再是一跳 15%，而是连续过渡。
+     拖拽平移仍走 panBy 直接写 S.view，保持 1:1 跟手，不被平滑拖慢。
+     任何直接写 S.view 的地方（fitAll / 手势）都必须调用 R.syncViewTarget()，
+     否则残留的目标值会把视图又拉回去。
+     ------------------------------------------------------------------ */
+  var viewTarget = null;      /* { x, y, zoom, fold } 目标视图；null = 与 S.view 同步 */
+  var smoothOn = false;
+  var SMOOTH_TAU = 58;        /* 毫秒；越小越跟手，越大越绵 */
+  var lastFrameT = 0;
+
+  /**
+   * 计算「屏幕内某点」的容差对应的 world 阈值，用于判断平滑是否收敛。
+   * 直接拿 world 单位比大小会随缩放级别漂移，必须换回像素比较。
+   */
+  function smoothDone(v, t) {
+    var ppy = T.pxPerYear(v);
+    var z = v.zoom || 1;
+    return Math.abs(t.x - v.x) * ppy < 0.25 &&
+      Math.abs(t.y - v.y) * z < 0.25 &&
+      Math.abs(Math.log(t.zoom) - Math.log(v.zoom)) < 6e-4 &&
+      Math.abs(Math.log(t.fold) - Math.log(v.fold)) < 6e-4;
+  }
+
+  function target() {
+    if (!viewTarget) {
+      viewTarget = { x: S.view.x, y: S.view.y, zoom: S.view.zoom, fold: S.view.fold };
+    }
+    return viewTarget;
+  }
+
+  /** 丢弃目标视图：下一次平滑会以当前 S.view 作为起点 */
+  R.syncViewTarget = function () { viewTarget = null; smoothOn = false; };
+
+  /**
+   * 立即结算：把「平滑目标 / 补间终点」一次性写进 S.view，不产生任何过渡帧。
+   * 关闭动效（设置里的「减少动效」）时，滚轮缩放、折叠、跳转都应一步到位，
+   * 否则会出现「明明关了动效，缩放还在自己滑」的割裂感。
+   */
+  R.settle = function () {
+    var changed = false;
+
+    if (tween) {
+      var v0 = S.view, t0 = tween.to;
+      v0.x = t0.x; v0.y = t0.y;
+      v0.zoom = Math.exp(t0.lz); v0.fold = Math.exp(t0.lf);
+      tween = null;
+      changed = true;
+    }
+    if (viewTarget) {
+      S.view.x = viewTarget.x; S.view.y = viewTarget.y;
+      S.view.zoom = viewTarget.zoom; S.view.fold = viewTarget.fold;
+      viewTarget = null;
+      changed = true;
+    }
+    smoothOn = false;
+    if (changed) { dirty = true; S.emit('view'); }
+  };
+
+  /* 减少动效：直接把目标值落到 S.view，跳过指数逼近 */
+  R.reducedMotion = function () { return !!S.reduceMotion; };
+
+  function startSmooth() {
+    if (S.reduceMotion) { R.settle(); return; }
+    smoothOn = true; dirty = true;
+  }
+
   R.markDirty = function () { dirty = true; };
 
   /* ------------------------------ 初始化 ------------------------------ */
@@ -72,7 +141,17 @@
 
   function loop() {
     rafId = requestAnimationFrame(loop);
-    if (tween) stepTween();
+    var now = performance.now();
+    var dt = lastFrameT ? (now - lastFrameT) : 16.7;
+    lastFrameT = now;
+    if (dt > 64) dt = 64;               /* 切后台回来不要一次跳完 */
+
+    /* 减少动效：任何在途的平滑/补间都立刻结算，不残留过渡帧 */
+    if (S.reduceMotion) {
+      if (tween || smoothOn) R.settle();
+    } else if (tween) stepTween();
+    else if (smoothOn) stepSmooth(dt);
+
     if (!dirty) return;
     dirty = false;
     try {
@@ -86,9 +165,39 @@
 
   R.stop = function () { cancelAnimationFrame(rafId); };
 
+  /* ------------------------------ 平滑逼近 ------------------------------ */
+
+  function stepSmooth(dt) {
+    if (!viewTarget) { smoothOn = false; return; }
+    var v = S.view, t = viewTarget;
+
+    /* 帧率无关的指数逼近：60Hz 与 120Hz 的观感一致 */
+    var a = 1 - Math.exp(-dt / SMOOTH_TAU);
+
+    if (smoothDone(v, t)) {
+      v.x = t.x; v.y = t.y; v.zoom = t.zoom; v.fold = t.fold;
+      smoothOn = false;
+      dirty = true;
+      S.emit('view');
+      return;
+    }
+
+    v.x += (t.x - v.x) * a;
+    v.y += (t.y - v.y) * a;
+    /* zoom / fold 在对数域插值：等比变化看起来才是匀速的 */
+    v.zoom = Math.exp(Math.log(v.zoom) + (Math.log(t.zoom) - Math.log(v.zoom)) * a);
+    v.fold = Math.exp(Math.log(v.fold) + (Math.log(t.fold) - Math.log(v.fold)) * a);
+
+    dirty = true;
+    S.emit('view');       /* 订阅方全是节流过的轻活，逐帧发没有压力 */
+  }
+
   /* ------------------------------ 补间 ------------------------------ */
 
   R.animateTo = function (target, duration) {
+    /* 补间与平滑互斥：补间接管后，残留的平滑目标必须清掉 */
+    smoothOn = false;
+    viewTarget = null;
     var cur = S.view;
     var from = { x: cur.x, y: cur.y, zoom: cur.zoom, fold: cur.fold };
     var to = {
@@ -99,6 +208,7 @@
     };
     if (S.reduceMotion) {
       cur.x = to.x; cur.y = to.y; cur.zoom = to.zoom; cur.fold = to.fold;
+      R.syncViewTarget();
       R.markDirty();
       return;
     }
@@ -121,7 +231,7 @@
     v.fold = Math.exp(tween.from.lf + (tween.to.lf - tween.from.lf) * e);
     dirty = true;
     S.emit('view');
-    if (p === 1) tween = null;
+    if (p === 1) { tween = null; R.syncViewTarget(); }
   }
 
   R.isAnimating = function () { return !!tween; };
@@ -298,7 +408,7 @@
     var ticks = C.ticks.enumerate(w0, w1, cfg.minor, cfg.subdiv);
     if (ticks.length > 1400) return;
 
-    var fontSize = U.clamp(11.4 * tf.zoom, 9, 15);
+    var fontSize = EV.quant(U.clamp(11.4 * tf.zoom, 9, 15), 0.5);
     EV.setFont(ctx, fontSize, 500);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -324,7 +434,7 @@
     for (var j = 0; j < ticks.length; j++) {
       if (!ticks[j].major) continue;
       var label = TM.formatTick(ticks[j].x, cfg.major, cfg.mode);
-      var w = ctx.measureText(label).width;
+      var w = EV.estimateWidth(ctx, label, fontSize, 500);
       var cxs = tf.x2s(ticks[j].x);
       var left = cxs - w / 2;
       if (left < lastRight + 8) continue;
@@ -363,11 +473,11 @@
       var rangeTxt = TM.format({ year: Math.round(TM.yearAt(lane.minX)), precision: 'year', display: null }) +
         ' — ' + TM.format({ year: Math.round(TM.yearAt(lane.maxX)), precision: 'year', display: null });
       rightTxt = lane.tl.events.length + ' 个事件   ' + rangeTxt;
-      rightW = EV.measureText(ctx, rightTxt, U.clamp(10.5 * tf.zoom, 9, 13), 400) + 22;
+      rightW = EV.estimateWidth(ctx, rightTxt, EV.quant(U.clamp(10.5 * tf.zoom, 9, 13), 0.5), 400) + 22;
     }
 
-    var titleSize = U.clamp(13 * tf.zoom, 10, 17);
-    var subSize = U.clamp(11 * tf.zoom, 9, 14);
+    var titleSize = EV.quant(U.clamp(13 * tf.zoom, 10, 17), 0.5);
+    var subSize = EV.quant(U.clamp(11 * tf.zoom, 9, 14), 0.5);
     var rightEdge = size.w - 14;
     var avail = rightEdge - rightW - tx;
 
@@ -375,12 +485,12 @@
     EV.setFont(ctx, titleSize, 650);
     ctx.fillStyle = pal.laneTitle;
     ctx.fillText(titleTxt, tx, fy);
-    var wTitle = EV.measureText(ctx, titleTxt, titleSize, 650);
+    var wTitle = EV.estimateWidth(ctx, titleTxt, titleSize, 650);
 
     var sub = lane.tl.subtitle || (lane.tl.description ? U.truncate(lane.tl.description, 26) : '');
     if (sub && tf.zoom > 0.55) {
-      var sep = '·';
-      var sw = EV.measureText(ctx, sep, subSize, 400);
+      var sep = '　';
+      var sw = EV.estimateWidth(ctx, sep, subSize, 400);
       var sepX = tx + wTitle + 8 * ts;
       var subX = sepX + sw + 6 * ts;
       var subAvail = rightEdge - rightW - subX;
@@ -395,7 +505,7 @@
     /* 事件数量与时间跨度（右侧） */
     if (rightTxt) {
       ctx.textAlign = 'right';
-      EV.setFont(ctx, U.clamp(10.5 * tf.zoom, 9, 13), 400);
+      EV.setFont(ctx, EV.quant(U.clamp(10.5 * tf.zoom, 9, 13), 0.5), 400);
       ctx.fillStyle = pal.laneSub;
       ctx.fillText(rightTxt, rightEdge, fy);
       ctx.textAlign = 'start';
@@ -521,7 +631,11 @@
       fold: T.clampFold(fold)
     };
     if (animate) R.animateTo(target, 520);
-    else { S.view.x = target.x; S.view.y = target.y; S.view.zoom = target.zoom; S.view.fold = target.fold; R.markDirty(); }
+    else {
+      S.view.x = target.x; S.view.y = target.y; S.view.zoom = target.zoom; S.view.fold = target.fold;
+      R.syncViewTarget();
+      R.markDirty();
+    }
     S.emit('view');
   };
 
@@ -538,7 +652,11 @@
       fold: T.clampFold(fold)
     };
     if (animate) R.animateTo(target, 480);
-    else { S.view.x = target.x; S.view.y = target.y; S.view.fold = target.fold; R.markDirty(); }
+    else {
+      S.view.x = target.x; S.view.y = target.y; S.view.fold = target.fold;
+      R.syncViewTarget();
+      R.markDirty();
+    }
     S.emit('view');
   };
 
@@ -584,70 +702,119 @@
     return true;
   };
 
-  /** 用屏幕坐标缩放（锚点保持不动） */
+  /**
+   * 用屏幕坐标缩放（锚点保持不动）
+   * 改的是 viewTarget，平滑由渲染循环推进；连续滚轮事件会正确叠加。
+   */
   R.zoomAt = function (px, py, factor) {
-    var tf0 = T.make(S.view, R.size);
+    var t = target();
+    var tf0 = T.make(t, R.size);
     var wx = tf0.s2x(px), wy = tf0.s2y(py);
-    S.view.zoom = T.clampZoom(S.view.zoom * factor);
-    var tf1 = T.make(S.view, R.size);
-    S.view.x += wx - tf1.s2x(px);
-    S.view.y += wy - tf1.s2y(py);
-    R.markDirty();
-    S.emit('view');
+    t.zoom = T.clampZoom(t.zoom * factor);
+    var tf1 = T.make(t, R.size);
+    t.x += wx - tf1.s2x(px);
+    t.y += wy - tf1.s2y(py);
+    startSmooth();
   };
 
   /** 用屏幕坐标做横向折叠（只影响 X） */
   R.foldAt = function (px, factor, py) {
-    var tf0 = T.make(S.view, R.size);
+    var t = target();
+    var tf0 = T.make(t, R.size);
     var wx = tf0.s2x(px);
-    S.view.fold = T.clampFold(S.view.fold * factor);
-    var tf1 = T.make(S.view, R.size);
-    S.view.x += wx - tf1.s2x(px);
-    if (py != null) {
-      var wy = tf0.s2y(py);
-      S.view.y += wy - tf1.s2y(py);
-    }
-    R.markDirty();
-    S.emit('view');
+    var wy = (py != null) ? tf0.s2y(py) : null;
+    t.fold = T.clampFold(t.fold * factor);
+    var tf1 = T.make(t, R.size);
+    t.x += wx - tf1.s2x(px);
+    if (wy != null) t.y += wy - tf1.s2y(py);
+    startSmooth();
   };
 
   /** 横向折叠：以视口中心为锚点（view.x 即视口中心的世界坐标，故只需改 fold） */
   R.setFold = function (f) {
     var next = T.clampFold(f);
-    if (Math.abs(next - S.view.fold) < 1e-12) return;
-    S.view.fold = next;
-    R.markDirty();
-    S.emit('view');
+    var t = target();
+    if (Math.abs(next - t.fold) < 1e-12) return;
+    t.fold = next;
+    startSmooth();
   };
 
   R.foldBy = function (factor) {
-    R.setFold(S.view.fold * factor);
+    R.setFold(target().fold * factor);
   };
 
   /** 让「一屏显示的年份数」= years（用于折叠面板的档位快捷设置） */
   R.setYearsPerScreen = function (years) {
     years = Math.max(years, 1e-6);
     var perScreen = R.size.w || window.innerWidth || 1;
-    R.setFold((perScreen / years) / (T.BASE_PX_PER_YEAR * S.view.zoom));
+    R.setFold((perScreen / years) / (T.BASE_PX_PER_YEAR * target().zoom));
   };
 
-  /** 当前一屏显示的年份数 */
+  /** 当前一屏显示的年份数（按实际显示值计算） */
   R.yearsPerScreen = function () {
     var ppy = T.pxPerYear(S.view);
     return (R.size.w || window.innerWidth || 1) / ppy;
   };
 
+  R.yearsPerScreenTarget = function () {
+    var ppy = T.pxPerYear(target());
+    return (R.size.w || window.innerWidth || 1) / ppy;
+  };
+
+  /** 拖拽平移：直接写 S.view 保持跟手，同时把目标视图一起平移，避免被平滑拉回 */
   R.panBy = function (dxScreen, dyScreen) {
     var tf = R.tf || T.make(S.view, R.size);
-    S.view.x -= dxScreen / tf.pxPerYear;
-    S.view.y -= dyScreen / tf.zoom;
+    var wx = dxScreen / tf.pxPerYear;
+    var wy = dyScreen / tf.zoom;
+    S.view.x -= wx;
+    S.view.y -= wy;
+    if (viewTarget) { viewTarget.x -= wx; viewTarget.y -= wy; }
     R.markDirty();
     S.emit('view');
   };
 
+  /* 「重置视图」的参数：聚焦最近 2000 年，一屏约容纳 4 条轨道。
+     它和「纵览全部」的分工：纵览全部要装下「所有时间轴 + 全部年代」，
+     内置于数据补到约前 9000 年之后，那已经是 1.1 万年一屏的宏观视角，
+     主干挤成一团、只剩最高等级的事件；重置视图则给一个「看得清主干」的常规起点。 */
+  var RESET_SPAN_YEARS = 2000;
+  var RESET_LANES = 4;
+  /* 上下各一条悬浮工具栏，纵向排布时要把它们的高度让出来 */
+  var TOOLBAR_RESERVE = 150;
+
   R.resetView = function () {
-    S.view.zoom = 1;
-    R.fitAll(true);
+    var b = C.store.bounds || { minX: 0, maxX: 100 };
+    var maxX = b.maxX;
+    var minX = maxX - RESET_SPAN_YEARS;
+
+    if (!R.lanes || !R.lanes.length) R.computeLanes();
+    var lanes = R.lanes || [];
+    var count = lanes.length ? Math.min(RESET_LANES, lanes.length) : RESET_LANES;
+
+    /* 纵向：一屏刚好排下 count 条轨道。
+       分子用「整块内容高度 - 末条之后的间距」（stride*count - GAP），
+       并预留出上下两条悬浮工具栏的高度 —— 按 h/(stride*count) 算的话，
+       末条轨道的轴线会正好压在底部工具栏下面。 */
+    var stride = T.LANE_H + T.LANE_GAP;
+    var blockH = count * stride - T.LANE_GAP;
+    var zoom = T.clampZoom((R.size.h - TOOLBAR_RESERVE) * 0.99 / blockH);
+
+    /* 纵向中心取「这几条轨道的整体中线」，而不是全部内容的中线 ——
+       否则轨道很多时会停在一片空白上。 */
+    var y = lanes.length
+      ? (lanes[0].top + lanes[count - 1].bottom) / 2
+      : C.store.contentHeight() / 2;
+
+    /* 横向：让这 2000 年填满约 92% 的宽度 */
+    var fold = T.clampFold((R.size.w * 0.92) / (RESET_SPAN_YEARS * T.BASE_PX_PER_YEAR * zoom));
+
+    R.animateTo({
+      x: minX + RESET_SPAN_YEARS / 2,
+      y: y,
+      zoom: zoom,
+      fold: fold
+    }, 520);
+    S.emit('view');
   };
 
   C.renderer = R;

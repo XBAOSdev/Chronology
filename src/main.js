@@ -68,7 +68,7 @@
     }
 
     /* 便于排查 */
-    window.CHRONO.version = '1.4.0';
+    window.CHRONO.version = '1.8.0';
   }
 
   function restoreView() {
@@ -97,11 +97,23 @@
     });
   }
 
+  /** 窄屏（手机）判定：断点与 styles/layout.css 保持一致 */
+  function isNarrowScreen() {
+    return window.matchMedia
+      ? window.matchMedia('(max-width: 640px)').matches
+      : window.innerWidth <= 640;
+  }
+
   function showHint() {
     var el = document.getElementById('hint');
     if (!el) return;
-    el.innerHTML = '<b>拖动</b> 平移　·　<b>滚轮</b> 整体缩放　·　' +
-      '<b>Ctrl + 滚轮</b> 横向折叠　·　<b>点击节点</b> 查看详情　·　<b>Ctrl + F</b> 搜索';
+    /* 窄屏不显示操作提示：提示里的键位在触屏上基本不可用，且窄屏排版拥挤 */
+    if (isNarrowScreen()) {
+      if (el.parentNode) el.parentNode.removeChild(el);
+      return;
+    }
+    el.innerHTML = '<b>拖动</b> 平移　　<b>滚轮</b> 整体缩放　　' +
+      '<b>Ctrl + 滚轮</b> 横向折叠　　<b>点击节点</b> 查看详情　　<b>Ctrl + F</b> 搜索';
 
     var seen = U.storage.get(HINT_KEY, false);
     el.classList.add('is-on');
@@ -133,21 +145,37 @@
    * 自动回退为内联 SVG，图标不会缺失，也不会产生任何外部网络请求。
    */
   function initSiteIcon() {
-    var link = document.getElementById('site-icon');
-    if (!link) return;
     var FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E" +
       "%3Crect width='32' height='32' rx='7' fill='%230f1115'/%3E" +
       "%3Cpath d='M5 16h22M9 11v10M16 8v16M23 11v10' stroke='%235b9cf8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
-    if (location.protocol === 'file:') {
-      /* file:// 下绝对路径必然取不到，直接用内联图标，省去一次无谓请求 */
-      link.href = FALLBACK;
-      return;
+    /* 图标整条链路由脚本创建，不在 HTML 里静态声明 <link rel="icon">：
+       file:// 下 /bin/logo.webp 这种绝对路径必然取不到，浏览器还会因此往控制台
+       抛一条「Unsafe attempt to load URL … 'file:' URLs are treated as unique
+       security origins」——对离线双击打开的用户是纯噪音。 */
+    var http = location.protocol === 'http:' || location.protocol === 'https:';
+
+    var link = document.getElementById('site-icon');
+    if (!link) {
+      link = document.createElement('link');
+      link.id = 'site-icon';
+      link.rel = 'icon';
     }
 
+    /* 关键顺序：必须先把 href/type 写好，再把 <link> 挂进文档。
+       若以「href 为空」的状态插入，浏览器会立刻用文档自身的地址去取图标
+       （file:// 下就是那条 Unsafe attempt 报错的真正来源），事后补 href 已来不及。 */
+    link.type = http ? 'image/webp' : 'image/svg+xml';
+    link.href = http ? '/bin/logo.webp' : FALLBACK;
+    if (!link.parentNode) document.head.appendChild(link);
+
+    if (!http) return;
+
     var probe = new Image();
-    probe.onload = function () { /* /bin/logo.webp 可用，保持 */ };
-    probe.onerror = function () { link.href = FALLBACK; };
+    probe.onerror = function () {
+      link.type = 'image/svg+xml';
+      link.href = FALLBACK;
+    };
     probe.src = '/bin/logo.webp';
   }
 

@@ -22,6 +22,13 @@
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes sheet { from { transform: translateY(100%); } to { transform: none; } }
 
+/* 出场：与入场镜像，时长统一用 --dur / --dur-slow，JS 在动画结束后才真正移除节点 */
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sink { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(0.988); } }
+/* 弹窗盒子外层遮罩已经淡出，盒子只做位移，避免透明度叠乘导致「一下就没了」 */
+@keyframes sinkOnly { from { transform: none; } to { transform: translateY(10px) scale(0.988); } }
+@keyframes sheetOut { from { transform: none; } to { transform: translateY(100%); } }
+
 .modal {
   width: min(92vw, 520px);
   max-height: min(86vh, 900px);
@@ -39,6 +46,10 @@
 .modal--sm { width: min(92vw, 400px); }
 .modal--lg { width: min(94vw, 720px); }
 .modal--xl { width: min(96vw, 940px); }
+
+/* 关闭时：遮罩淡出、盒子下沉（窄屏为下滑出屏） */
+.modal-root.is-closing { animation: fadeOut var(--dur) var(--ease-out) forwards; pointer-events: none; }
+.modal-root.is-closing > .modal { animation: sinkOnly var(--dur) var(--ease-out) forwards; }
 
 .modal__head {
   display: flex;
@@ -93,6 +104,7 @@
     padding-bottom: var(--safe-bottom);
   }
   .modal--sm, .modal--lg, .modal--xl { width: 100%; }
+  .modal-root.is-closing > .modal { animation: sheetOut var(--dur-slow) var(--ease-out) forwards; }
   .modal__foot { position: sticky; bottom: 0; background: var(--glass-strong); }
 }
 
@@ -160,6 +172,7 @@ select option { background: var(--panel); color: var(--text); }
 }
 .check input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); flex: 0 0 auto; }
 
+/* 按钮唯一基准：高度 / 圆角 / 内边距 / 字号全部走令牌，弹窗内不要再单独改高度 */
 .btn {
   -webkit-appearance: none;
   appearance: none;
@@ -169,27 +182,56 @@ select option { background: var(--panel); color: var(--text); }
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 550;
-  min-height: 38px;
-  padding: 0 0.9rem;
-  border-radius: var(--radius-sm);
+  min-height: var(--btn-h);
+  padding: 0 var(--btn-pad);
+  border-radius: var(--btn-radius);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease-spring);
   white-space: nowrap;
 }
-.btn:hover { background: var(--glass-hi); }
+/* hover 必须同时给出「底色变化 + 文字色显式声明」，避免底色与文字撞色 */
+.btn:hover {
+  background: var(--glass-hi);
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+  color: var(--text);
+}
+.btn:active { transform: translateY(1px); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-.btn--primary:hover { filter: brightness(1.08); }
-.btn--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
-.btn--danger:hover { background: var(--danger-soft); }
-.btn--ghost { border-color: transparent; background: transparent; }
-.btn--ghost:hover { background: var(--glass-hi); }
-.btn--sm { min-height: 32px; padding: 0 0.6rem; font-size: 0.75rem; }
-.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.btn--primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  filter: brightness(1.07);
+}
+.btn--primary:active { filter: brightness(0.96); transform: translateY(1px) scale(0.975); }
+.btn--danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent);
+}
+.btn--danger:hover {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 62%, transparent);
+  color: var(--danger);
+}
+.btn--ghost { border-color: transparent; background: transparent; color: var(--text-dim); }
+.btn--ghost:hover { background: var(--glass-hi); border-color: transparent; color: var(--text); }
+.btn--sm { min-height: var(--btn-h-sm); padding: 0 var(--btn-pad-sm); font-size: 0.75rem; border-radius: var(--radius-sm); }
+.btn[disabled],
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn[disabled]:hover,
+.btn:disabled:hover {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--text);
+  filter: none;
+  transform: none;
+}
 
 /* ------------------------------ 通用块 ------------------------------ */
 
@@ -281,7 +323,7 @@ select option { background: var(--panel); color: var(--text); }
   border-radius: var(--radius-md);
   cursor: pointer;
 }
-.result:hover { background: var(--glass-hi); }
+.result:hover { background: var(--glass-hi); color: var(--text); }
 .result.is-sel { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .result__top { display: flex; align-items: baseline; gap: 0.45rem; }
 .result__time { font-size: 0.75rem; color: var(--accent); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
@@ -313,6 +355,7 @@ select option { background: var(--panel); color: var(--text); }
   animation: rise var(--dur) var(--ease);
   overflow: hidden;
 }
+.detail.is-closing { animation: sink var(--dur) var(--ease-out) forwards; pointer-events: none; }
 .detail__head { padding: 0.85rem 0.9rem 0.7rem; border-bottom: 1px solid var(--line-soft); }
 .detail__time { font-size: 0.75rem; color: var(--accent); font-variant-numeric: tabular-nums; margin-bottom: 0.15rem; }
 .detail__title { font-size: 1rem; font-weight: 650; line-height: 1.4; }
@@ -331,6 +374,7 @@ select option { background: var(--panel); color: var(--text); }
     animation: sheet var(--dur-slow) var(--ease);
   }
   .detail__body { max-height: 30vh; }
+  .detail.is-closing { animation: sheetOut var(--dur-slow) var(--ease-out) forwards; }
 }
 
 /* 聚合节点展开列表 */
@@ -379,7 +423,14 @@ select option { background: var(--panel); color: var(--text); }
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 0.5rem;
 }
-.grid-actions .btn { min-height: 60px; flex-direction: column; gap: 0.35rem; font-size: 0.75rem; }
+.grid-actions .btn {
+  min-height: 60px;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius-md);
+}
+.grid-actions .btn:hover { background: var(--glass-hi); color: var(--text); }
 .grid-actions .btn svg { width: 20px; height: 20px; }
 
 .kbd-list { display: grid; gap: 0.35rem; }
@@ -417,6 +468,8 @@ kbd {
 }
 .note--warn { border-color: color-mix(in srgb, var(--warn) 35%, transparent); color: var(--warn); }
 .note--danger { border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); }
+/* 只换描边不换文字色：授权条款那段正文很长，整段染绿会明显拉低对比度 */
+.note--ok { border-color: color-mix(in srgb, var(--ok) 38%, transparent); }
 .note b { color: var(--text); }
 
 .counter { font-size: 0.6875rem; color: var(--text-faint); text-align: right; margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
@@ -435,7 +488,7 @@ kbd {
 
 .modal__body > *:last-child { margin-bottom: 0; }
 .modal__foot { row-gap: 0.45rem; }
-.modal__foot .btn { min-height: 40px; }
+.modal__foot .btn { min-height: var(--btn-h); }
 
 /* 小屏：底部抽屉，按钮撑满、可换行，杜绝横向溢出 */
 @media (max-width: 640px) {
@@ -471,9 +524,8 @@ kbd {
 }
 .item--tl .item__meta .mi { white-space: nowrap; }
 .item--tl .item__meta .mi + .mi::before {
-  content: '·';
+  content: ' ';
   margin: 0 0.42rem;
-  opacity: 0.65;
 }
 .item--tl .item__actions {
   display: flex;
@@ -486,8 +538,9 @@ kbd {
 .act-pair { display: inline-flex; gap: 0.15rem; flex: 0 0 auto; }
 
 .btn--icon {
-  width: 34px;
-  min-width: 34px;
+  width: var(--btn-h-sm);
+  min-width: var(--btn-h-sm);
+  height: var(--btn-h-sm);
   padding: 0;
   justify-content: center;
 }
@@ -505,7 +558,7 @@ kbd {
   /* 列方向下必须取消主轴 flex-basis，否则会被撑成 190px 的空白高度 */
   .item--tl .item__main { flex: 0 0 auto; }
   .item--tl .item__actions { justify-content: flex-start; }
-  .item--tl .item__actions .btn { min-height: 32px; }
+  .item--tl .item__actions .btn { min-height: var(--btn-h-sm); font-size: 0.75rem; }
 }
 
 /* 主题色选择 */
@@ -541,6 +594,7 @@ kbd {
   backdrop-filter: blur(20px) saturate(150%);
   animation: rise var(--dur) var(--ease);
 }
+.fold-panel.is-closing { animation: sink var(--dur) var(--ease-out) forwards; pointer-events: none; }
 .fold-panel__head {
   display: flex;
   align-items: center;
@@ -558,7 +612,7 @@ kbd {
 .fold-panel__title svg { width: 15px; height: 15px; color: var(--accent); }
 .fold-panel__x { width: 30px; height: 30px; min-height: 30px; min-width: 30px; padding: 0; }
 .fold-panel__row { display: flex; align-items: center; gap: 0.4rem; }
-.fold-panel__row .fp-btn { flex: 0 0 auto; min-width: 78px; }
+.fold-panel__row .fp-btn { flex: 0 0 auto; min-width: 78px; min-height: var(--btn-h-sm); font-size: 0.75rem; }
 .fold-panel__row .fp-btn svg { width: 1em; height: 1em; }
 .fold-panel__row input[type="range"] {
   flex: 1 1 auto;
@@ -582,8 +636,8 @@ kbd {
   gap: 0.3rem;
   margin-top: 0.5rem;
 }
-.fold-panel__presets .btn { min-height: 30px; padding: 0 0.5rem; font-size: 0.6875rem; }
-.fp-full { width: 100%; margin-top: 0.5rem; min-height: 32px; }
+.fold-panel__presets .btn { min-height: var(--btn-h-sm); padding: 0 0.5rem; font-size: 0.6875rem; }
+.fp-full { width: 100%; margin-top: 0.5rem; min-height: var(--btn-h-sm); font-size: 0.75rem; }
 .fold-panel__hint {
   margin-top: 0.55rem;
   font-size: 0.6875rem;
@@ -695,4 +749,86 @@ kbd {
   .detail--edit { max-height: 78vh; }
   .detail--edit .detail__foot .btn { flex: 1 1 auto; min-width: 72px; }
   .detail--edit .detail__foot .spacer { flex: 0 0 0; }
+}
+
+/* ===================================================================
+   柔光玻璃 —— B 档「近似液态玻璃」的统一质感
+   -------------------------------------------------------------------
+   自研实现，不引用任何第三方素材、图标或设计语言命名。
+   构成三层：
+     ① 斜向高光渐变 + 半透明底色（打底，绘制在文字之下）
+     ② backdrop-filter 背景模糊 + 饱和度提升（折射感）
+     ③ 顶部内侧高光 + 底部内侧暗边 + 外描边（厚度与边缘反光）
+   三套底色令牌：大面积浮层用 --gl-bg-*，小控件用更实的 --gl-s-*，
+   主界面悬浮控件用更透的 --gl-f-* / --gl-fs-* —— 既要让画布内容透得出来，
+   又要保证小字号压在画布亮像素上时依然清晰（深色模式尤其重要）。
+   （曾试过「指针跟随柔光」，实测观感不佳，已移除。）
+   =================================================================== */
+
+.toolbar,
+.modal,
+.detail,
+.fold-panel,
+.dropzone__box,
+.brand,
+.chip,
+.hint,
+.toast {
+  background-color: transparent;
+  background-image:
+    linear-gradient(158deg, var(--gl-a) 0%, var(--gl-b) 48%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(var(--gl-bg-a), var(--gl-bg-b));
+  border-color: var(--gl-edge);
+  box-shadow:
+    inset 0 1px 0 0 var(--gl-rim),
+    inset 0 -1px 0 0 var(--gl-rim-b),
+    inset 0 0 0 1px var(--gl-edge),
+    var(--shadow);
+  -webkit-backdrop-filter: blur(var(--gl-blur)) saturate(var(--gl-sat));
+  backdrop-filter: blur(var(--gl-blur)) saturate(var(--gl-sat));
+}
+
+/* 小控件：面积小、常被画布正文「穿透」，底色更实 */
+.brand,
+.chip,
+.hint,
+.toast {
+  background-image:
+    linear-gradient(160deg, var(--gl-a) 0%, var(--gl-b) 52%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(var(--gl-s-a), var(--gl-s-b));
+}
+
+/* 主界面悬浮控件：比弹窗再透一档。
+   这些控件直接压在画布上，透一点能让下面的时间轴透出来，层次更清楚；
+   斜向高光改用专属的 --gl-f-hi（浅色主题里大面积浮层的 --gl-a 接近纯白，
+   照搬会把浮钮压成不透明，必须单独调）。 */
+.toolbar {
+  background-image:
+    linear-gradient(158deg, var(--gl-f-hi) 0%, rgba(255, 255, 255, 0) 54%),
+    linear-gradient(var(--gl-f-a), var(--gl-f-b));
+}
+.brand,
+.chip,
+.hint {
+  background-image:
+    linear-gradient(158deg, var(--gl-f-hi) 0%, rgba(255, 255, 255, 0) 54%),
+    linear-gradient(var(--gl-fs-a), var(--gl-fs-b));
+}
+
+/* 窄屏底部操作条要压在滚动内容之上，给它同款玻璃底 */
+@media (max-width: 640px) {
+  .modal__foot {
+    background: linear-gradient(var(--gl-bg-a), var(--gl-bg-b));
+    -webkit-backdrop-filter: blur(var(--gl-blur)) saturate(var(--gl-sat));
+    backdrop-filter: blur(var(--gl-blur)) saturate(var(--gl-sat));
+  }
+}
+
+/* 不支持 backdrop-filter 时回退为不透明底，宁可不好看也不能看不清 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .toolbar, .modal, .detail, .fold-panel, .dropzone__box, .modal__foot,
+  .brand, .chip, .hint, .toast {
+    background-image: none;
+    background-color: var(--glass-strong);
+  }
 }

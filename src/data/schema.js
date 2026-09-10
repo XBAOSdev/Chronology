@@ -20,7 +20,7 @@
   SC.MAX_SUMMARY = MAX_SUMMARY;
   SC.PRECISIONS = PRECISIONS;
 
-  SC.LEVEL_LABEL = { 1: '1 级 · 核心', 2: '2 级 · 重要', 3: '3 级 · 补充', 4: '4 级', 5: '5 级' };
+  SC.LEVEL_LABEL = { 1: '1 级 核心', 2: '2 级 重要', 3: '3 级 补充', 4: '4 级', 5: '5 级' };
 
   function isStr(v) { return typeof v === 'string' && v.length > 0; }
   function isNum(v) { return typeof v === 'number' && isFinite(v); }

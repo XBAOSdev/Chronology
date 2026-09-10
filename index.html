@@ -4,11 +4,21 @@
 <meta charset="utf-8" data-page-node-id="0BawCoJaNhDTYqzQzFD7ub">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" data-page-node-id="55FdCJr2WtgDkX5l9kfZCA">
 <meta name="color-scheme" content="dark light" data-page-node-id="tUxBtpcZR4cIrBEFkjI11X">
-<meta name="description" content="大事年表 —— 纯前端离线可用的高中历史时间轴工具" data-page-node-id="bJz8y9L28cCuccn8qFkivY">
+<meta name="description" content="历史大事年表是一款可编辑的在线时间轴工具，按人教版高中历史教材体系整理中国史与世界史主干事件，支持缩放、折叠、检索与自定义增删改。纯前端实现，无需登录、离线可用，适合高中历史学习与教学辅助。" data-page-node-id="bJz8y9L28cCuccn8qFkivY">
+<meta name="keywords" content="历史大事年表,高中历史时间轴,可编辑时间轴,中外历史纲要,历史时间轴工具,高中历史复习" data-page-node-id="kR3pWq7nHtYb2XmZ9sVdLe">
+<meta name="author" content="XBAOS">
 <meta name="theme-color" content="#0f1115" data-page-node-id="fgsvlVXfp0tm7o3imGdqHB">
-<title>大事年表</title>
-<!-- 站点图标：XBAOS 官网图标；若不可用（如 file:// 离线打开）由启动脚本自动回退为内联 SVG，不产生外部请求 -->
-<link rel="icon" id="site-icon" href="/bin/logo.webp" type="image/webp" data-page-node-id="vAoH4tSmAVyDqkvZPJfU3Q">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="XBAOS">
+<meta property="og:title" content="历史大事年表|可编辑时间轴 高中历史 辅助学习|XBAOS">
+<meta property="og:description" content="按人教版高中历史教材体系整理的中国史与世界史时间轴，可缩放折叠、可检索、可自定义编辑，纯前端离线可用。">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="历史大事年表|可编辑时间轴 高中历史 辅助学习|XBAOS">
+<meta name="twitter:description" content="按人教版高中历史教材体系整理的中国史与世界史时间轴，可缩放折叠、可检索、可自定义编辑，纯前端离线可用。">
+<title>历史大事年表|可编辑时间轴 高中历史 辅助学习|XBAOS</title>
+<!-- 站点图标：XBAOS 官网图标 /bin/logo.webp。
+     这里刻意不静态声明 <link rel="icon">：file:// 下绝对路径取不到，浏览器会往控制台
+     抛「Unsafe attempt to load URL」噪音。改由 main.js 按协议创建（离线用内联 SVG）。 -->
 <link rel="stylesheet" href="src/styles/theme.css" data-page-node-id="6pel6K15vCFFDPQHXOUrAI">
 <link rel="stylesheet" href="src/styles/layout.css" data-page-node-id="DLd9K9e2j54sTN4CsRSVVL">
 <link rel="stylesheet" href="src/styles/ui.css" data-page-node-id="6iJrJmY015Etr92xrtMDym">
@@ -56,6 +66,8 @@
 <script src="data/timelines/index.js"></script>
 <script src="data/timelines/china-history.js"></script>
 <script src="data/timelines/world-history.js"></script>
+<script src="data/timelines/economy-history.js"></script>
+<script src="data/timelines/culture-history.js"></script>
 
 <!-- ================= 工具层 ================= -->
 <script src="src/utils/util.js"></script>

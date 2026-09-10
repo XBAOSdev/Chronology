@@ -30,6 +30,21 @@
   --dur: 200ms;
   --dur-slow: 320ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);   /* 按压回弹：轻微过冲 */
+
+  /* —— 按钮尺寸令牌：全站按钮只从这里取值，避免各处各写一套 —— */
+  --btn-h: 38px;                /* 常规按钮（弹窗页脚、表单操作） */
+  --btn-h-sm: 30px;             /* 小号按钮（列表操作、折叠面板预设） */
+  --btn-radius: var(--radius-md);
+  --btn-pad: 0.9rem;
+  --btn-pad-sm: 0.6rem;
+
+  /* —— 柔光玻璃令牌（自研质感，命名与素材均不涉及任何第三方设计语言）——
+     结构：玻璃本体渐变 + 顶部内高光 + 内侧细描边。
+     这里只放与主题无关的折射参数，各层高光的强度分别在各主题块里定义。 */
+  --gl-blur: 22px;
+  --gl-sat: 175%;
 }
 
 /* ------------------------- 深色（默认） ------------------------- */
@@ -45,7 +60,7 @@
   --glass:         rgba(24, 29, 37, 0.66);
   --glass-strong:  rgba(20, 24, 31, 0.86);
   --glass-border:  rgba(255, 255, 255, 0.10);
-  --glass-hi:      rgba(255, 255, 255, 0.055);
+  --glass-hi:      rgba(255, 255, 255, 0.105);
   --shadow:        0 6px 22px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.35);
 
   --text:          #e9edf4;
@@ -82,6 +97,33 @@
   --c-label-bg:    #171c24;
   --c-label-text:  #e3e8f0;
   --c-cluster-bg:  #232a35;
+
+  /* —— 柔光玻璃（B 档「近似液态玻璃」，自研命名与实现，不涉及任何第三方设计语言）——
+     bg    = 大面积浮层（弹窗 / 详情卡 / 折叠面板 / 拖拽框）
+     s     = 小控件（状态胶囊 / 版权条 / 提示条 / Toast）：面积小、常压在画布正文上，
+             底色更实一点，保证「小字压在亮像素上」时依然清晰
+     f/fs  = 主界面悬浮控件（工具栏 / 版权条 / 状态胶囊 / 提示条）专属底色：
+             比弹窗透得多，让画布内容透出来，层次更清楚。
+             实测过三档强度后取中档（工具栏 0.52 / 小控件 0.72）——
+             再透下去小字号压在画布密集区就开始吃力了。
+     a/b   = 斜向高光渐变；edge = 外描边；rim = 顶部内高光
+     f-hi  = 悬浮控件的斜向高光强度（单独调，避免用大面积浮层的强高光把浮钮压成不透明） */
+  --gl-blur:      26px;
+  --gl-sat:       185%;
+  --gl-bg-a:      rgba(30, 36, 47, 0.72);
+  --gl-bg-b:      rgba(16, 20, 27, 0.78);
+  --gl-s-a:       rgba(28, 34, 44, 0.88);
+  --gl-s-b:       rgba(17, 21, 28, 0.91);
+  --gl-f-a:       rgba(30, 36, 47, 0.52);
+  --gl-f-b:       rgba(16, 20, 27, 0.58);
+  --gl-fs-a:      rgba(28, 34, 44, 0.72);
+  --gl-fs-b:      rgba(17, 21, 28, 0.76);
+  --gl-f-hi:      rgba(255, 255, 255, 0.055);
+  --gl-a:         rgba(255, 255, 255, 0.085);
+  --gl-b:         rgba(255, 255, 255, 0.000);
+  --gl-edge:      rgba(255, 255, 255, 0.130);
+  --gl-rim:       rgba(255, 255, 255, 0.175);
+  --gl-rim-b:     rgba(0, 0, 0, 0.300);
 }
 
 /* ------------------------- 浅色 ------------------------- */
@@ -96,12 +138,13 @@
   --glass:         rgba(255, 255, 255, 0.70);
   --glass-strong:  rgba(255, 255, 255, 0.92);
   --glass-border:  rgba(15, 23, 42, 0.10);
-  --glass-hi:      rgba(255, 255, 255, 0.55);
+  --glass-hi:      rgba(15, 23, 42, 0.062);
   --shadow:        0 6px 20px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
 
   --text:          #171d27;
   --text-dim:      #5b6675;
-  --text-faint:    #8a94a3;
+  /* 浅色下「毛玻璃」底色更亮，弱化文字需要再深一档，才能在玻璃上保持 ≥3:1 */
+  --text-faint:    #6e7987;
   --line:          rgba(15, 23, 42, 0.12);
   --line-soft:     rgba(15, 23, 42, 0.06);
 
@@ -133,6 +176,41 @@
   --c-label-bg:    #ffffff;
   --c-label-text:  #1c2431;
   --c-cluster-bg:  #e6eaf1;
+
+  /* —— 柔光玻璃（浅色）：玻璃偏亮、高光更强，靠描边和底部内侧阴影撑出厚度 —— */
+  --gl-blur:      26px;
+  --gl-sat:       180%;
+  --gl-bg-a:      rgba(255, 255, 255, 0.74);
+  --gl-bg-b:      rgba(244, 246, 250, 0.80);
+  --gl-s-a:       rgba(255, 255, 255, 0.90);
+  --gl-s-b:       rgba(245, 247, 251, 0.93);
+  --gl-f-a:       rgba(255, 255, 255, 0.56);
+  --gl-f-b:       rgba(244, 246, 250, 0.62);
+  --gl-fs-a:      rgba(255, 255, 255, 0.77);
+  --gl-fs-b:      rgba(245, 247, 251, 0.81);
+  --gl-f-hi:      rgba(255, 255, 255, 0.340);
+  --gl-a:         rgba(255, 255, 255, 0.700);
+  --gl-b:         rgba(255, 255, 255, 0.000);
+  --gl-edge:      rgba(15, 23, 42, 0.105);
+  --gl-rim:       rgba(255, 255, 255, 0.900);
+  --gl-rim-b:     rgba(15, 23, 42, 0.055);
+}
+
+/* ------------------------- 主题切换过场 -------------------------
+   为什么需要它：主题一变，颜色其实是「同时硬跳」的 ——
+     · Canvas 的颜色由 JS 从 CSS 变量读出来重绘，CSS 过渡管不到；
+     · 浮层的玻璃底是 linear-gradient 渐变，而渐变色不可过渡。
+   所以做一层覆盖全屏的「幕布」：先淡入到当前主题的背景色，在全遮盖的
+   那一刻换主题，再淡出。所有硬跳都发生在幕布全遮的一帧里，观感是一次
+   平滑的过场。减少动效时不走这里（由 theme.js 判断，直接切换）。 */
+.theme-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 300;                 /* 高于弹窗 80 / 拖拽遮罩 90 / Toast 95 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease);
+  will-change: opacity;
 }
 
 /* 减少动效 */
@@ -141,6 +219,17 @@
 [data-motion="off"] *::after {
   animation-duration: 0.001ms !important;
   transition-duration: 0.001ms !important;
+}
+
+/* 减少动效（激进档）：除上面的「过渡/动画清零」外，再关掉两类纯装饰动效 ——
+   ① 按钮按压回弹
+   ② 视图平滑 / 补间（由 renderer 的 R.settle 直接结算，见 renderer.js）
+   这样「减少动效」才是真的静止，而不是只把时长压到 0.001ms。 */
+[data-motion="off"] .tbtn:active,
+[data-motion="off"] .btn:active,
+[data-motion="off"] .swatch:hover,
+[data-motion="off"] .swatch.is-on {
+  transform: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

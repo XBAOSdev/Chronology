@@ -1,8 +1,8 @@
 /* ===================================================================
    大事年表 — 事件详情卡（查看 + 内联编辑）
-   · 查看态：标题、最精确时间、等级、标签、简介、归属
-   · 编辑态（进入编辑模式后点击节点即进入）：时间 / 标题 / 等级 / 标签 / 简介
-   · 点击画布空白处即关闭；系统内置时间轴需先复制副本才能编辑
+   - 查看态：标题、最精确时间、等级、标签、简介、归属
+   - 编辑态（进入编辑模式后点击节点即进入）：时间 / 标题 / 等级 / 标签 / 简介
+   - 点击画布空白处即关闭；系统内置时间轴需先复制副本才能编辑
    =================================================================== */
 (function () {
   'use strict';
@@ -39,9 +39,11 @@
     /* 阻止卡内滚轮/指针穿透到画布 */
     el.addEventListener('wheel', function (e) { e.stopPropagation(); }, { passive: true });
     el.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    /* 卡体有高度上限，内容更长时鼠标停在标题/按钮上也要能滚正文 */
+    U.wheelForward(el, function () { return el.querySelector('.detail__body'); });
   }
 
-  D.isOpen = function () { return !!el && !el.hidden; };
+  D.isOpen = function () { return !!el && !el.hidden && !U.isClosing(el); };
 
   D.open = function (timelineId, eventId, node, forceEdit) {
     if (!el) build();
@@ -74,13 +76,13 @@
     mode = wantEdit ? 'edit' : 'view';
     editing = false;
     renderContent();
-    el.hidden = false;
+    /* 若上一次关闭动画还没结束，这里要把它取消，否则会被旧的定时器隐藏 */
+    U.animIn(el);
     position(node);
   };
 
   D.close = function () {
-    if (!el) return;
-    el.hidden = true;
+    if (!el || el.hidden) return;
     current = null;
     mode = 'view';
     editing = false;
@@ -88,6 +90,7 @@
       S.selectedEvent = null;
       R.markDirty();
     }
+    U.animOut(el);
   };
 
   D.refresh = function () {
@@ -159,7 +162,7 @@
         '<div class="detail__pills">' + levelPill(ev.level) + tags + '</div>' +
       '</div>' +
       '<div class="detail__body">' + (U.escapeHtml(ev.summary) || '<em>暂无内容</em>') + sharedNote + '</div>' +
-      '<div class="detail__meta">' + meta.join('　·　') + '</div>' +
+      '<div class="detail__meta">' + meta.join('　　') + '</div>' +
       editHint +
       '<div class="detail__hintline detail__hintline--dim">点击画布空白处可关闭</div>';
 
@@ -434,7 +437,7 @@
           '<span class="item__main">' +
             '<span class="item__title">' + shape + ' ' + U.escapeHtml(ev.title) + '</span>' +
             '<span class="item__meta">' + U.escapeHtml(TM.formatPrecise(ev.date)) +
-              '　·　' + (C.schema.LEVEL_LABEL[ev.level] || ev.level + ' 级') + '</span>' +
+              '　　' + (C.schema.LEVEL_LABEL[ev.level] || ev.level + ' 级') + '</span>' +
           '</span>' +
         '</button>';
       }).join('') + '</div>';

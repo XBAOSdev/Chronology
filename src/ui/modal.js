@@ -20,6 +20,9 @@
   var stack = [];
   var openHandlers = [];
   var seq = 0;
+  /* 正在播放出场动画的层数。只要它 > 0，容器就不能被 hidden，
+     否则 display:none 会让出场动画一帧都看不到。 */
+  var closingCount = 0;
 
   UI.initShell = function () {
     root = document.getElementById('modal-root');
@@ -57,7 +60,7 @@
   }
 
   function syncRoot() {
-    if (root) root.hidden = stack.length === 0;
+    if (root) root.hidden = (stack.length === 0 && closingCount === 0);
   }
 
   UI.modal = {
@@ -147,6 +150,8 @@
 
       mask.appendChild(box);
       mask.addEventListener('mousedown', maskClick);
+      /* 滚轮停在标题栏 / 页脚 / 遮罩上时，也能滚动内容区（详见 U.wheelForward） */
+      U.wheelForward(mask, function () { return box.querySelector('.modal__body'); });
       closeBtn.addEventListener('click', function () { api.close(); });
 
       root.appendChild(mask);
@@ -176,9 +181,18 @@
       var idx = stack.indexOf(api);
       if (idx < 0) return;
       stack.splice(idx, 1);
-      /* 关键：移除遮罩层（不是只移除里面的盒子） */
+      /* 关键：移除遮罩层（不是只移除里面的盒子）。
+         先播出场动画，动画结束再真正摘除节点；期间遮罩 pointer-events:none，
+         既不拦截点击，也不会让下层弹窗「发虚却点不到」。 */
       var layer = api.mask || api.el;
-      if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
+      if (layer && layer.parentNode) {
+        closingCount++;
+        U.animOut(layer, function () {
+          closingCount = Math.max(0, closingCount - 1);
+          if (layer.parentNode) layer.parentNode.removeChild(layer);
+          syncRoot();
+        });
+      }
       syncRoot();
       if (api.opts && typeof api.opts.onClose === 'function') {
         try { api.opts.onClose(api); } catch (e) {}
